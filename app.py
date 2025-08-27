@@ -9,9 +9,10 @@ from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Text
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from forms import CreatePostForm, RegisterForm, LoginForm, CommentForm
 # Optional: add contact me email functionality (Day 60)
-# import smtplib
+import smtplib
 
 import os
 '''
@@ -29,14 +30,24 @@ This will install the packages from the requirements.txt for this project.
 
 
 app = Flask(__name__)
-#app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
-app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
+# Make app proxy-aware (scheme/host/prefix) when running behind Nginx
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
+#app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 ckeditor = CKEditor(app)
 Bootstrap5(app)
 
 # Configure Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+# Inject global template variables
+@app.context_processor
+def inject_global_template_vars():
+    return {
+        "current_year": date.today().year,
+        "site_owner": "Yuan Hang",
+    }
 
 
 @login_manager.user_loader
@@ -57,8 +68,8 @@ gravatar = Gravatar(app,
 # CREATE DATABASE
 class Base(DeclarativeBase):
     pass
-#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///posts.db'
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///posts.db")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///posts.db'
+#app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DB_URI", "sqlite:///posts.db")
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
@@ -272,9 +283,54 @@ def about():
     return render_template("about.html", current_user=current_user)
 
 
+def send_contact_email(name: str, email: str, phone: str, message: str) -> bool:
+    """Send a contact email using SMTP settings from environment variables.
+    Returns True if sent, False otherwise.
+    Required env vars (example):
+      SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, MAIL_TO
+    """
+    smtp_server = os.environ.get("SMTP_SERVER")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_username = os.environ.get("SMTP_USERNAME")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    mail_to = os.environ.get("MAIL_TO")
+
+    if not (smtp_server and smtp_username and smtp_password and mail_to):
+        # Missing config; log and return False
+        print("[contact] Missing SMTP configuration; not sending email.")
+        return False
+
+    from_addr = smtp_username
+    subject = "New Contact Message"
+    body = (
+        f"Name: {name}\n"
+        f"Email: {email}\n"
+        f"Phone: {phone}\n"
+        f"Message: {message}\n"
+    )
+    msg = f"Subject: {subject}\nFrom: {from_addr}\nTo: {mail_to}\n\n{body}"
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            server.sendmail(from_addr, [mail_to], msg)
+        return True
+    except Exception as exc:
+        print(f"[contact] Failed to send email: {exc}")
+        return False
+
+
 @app.route("/contact", methods=["GET", "POST"])
 def contact():
-    return render_template("contact.html", current_user=current_user)
+    if request.method == "POST":
+        name = request.form.get("name", "")
+        email = request.form.get("email", "")
+        phone = request.form.get("phone", "")
+        message = request.form.get("message", "")
+        sent_ok = send_contact_email(name, email, phone, message)
+        return render_template("contact.html", current_user=current_user, msg_sent=sent_ok)
+    return render_template("contact.html", current_user=current_user, msg_sent=False)
 
 # Optional: You can include the email sending code from Day 60:
 # DON'T put your email and password here directly! The code will be visible when you upload to Github.
@@ -301,4 +357,4 @@ def contact():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5001)
