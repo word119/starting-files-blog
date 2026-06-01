@@ -1,0 +1,27 @@
+services:
+  # 1. Reverse Proxy & Let's Encrypt Certificate Automated Manager
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: always
+    ports:
+      - '80:80'   # Handles HTTP traffic and Let's Encrypt verification
+      - '443:443' # Handles production HTTPS encrypted traffic
+      - '81:81'   # Admin UI Dashboard port
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+
+  # 2. Your Flask Blog Core Application Engine (Built from your local repo context)
+  flask-blog:
+    build: .
+    restart: always
+    environment:
+      - FLASK_ENV=production
+      # Forces SQLAlchemy to use a lightweight SQLite file inside the container volume
+      - DATABASE_URL=sqlite:///instance/blog.db 
+    volumes:
+      - ./instance:/app/instance  # Keeps your sqlite database file safe on the host disk
+    expose:
+      - "5000"
+    depends_on:
+      - nginx-proxy-manager
