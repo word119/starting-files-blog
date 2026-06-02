@@ -1,41 +1,52 @@
 services:
-  # 1. Reverse Proxy & Let's Encrypt Certificate Automated Manager
-  nginx-proxy-manager:
-    image: 'jc21/nginx-proxy-manager:latest'
-    restart: always
-    ports:
-      - '80:80'   # Handles HTTP traffic and Let's Encrypt verification
-      - '443:443' # Handles production HTTPS encrypted traffic
-      - '81:81'   # Admin UI Dashboard port
-    volumes:
-      - ./npm/data:/data
-      - ./npm/letsencrypt:/etc/letsencrypt
-
-  # 2. Local PostgreSQL service for the Flask app
   postgres:
     image: postgres:15-alpine
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=yuanhang_blogs
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - '5432:5432'
+      - '${POSTGRES_PORT}:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # 3. Your Flask Blog Core Application Engine (Built from your local repo context)
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+      - '81:81'
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - flask-blog
+
   flask-blog:
     build: .
     restart: always
     environment:
-      - FLASK_ENV=production
-      - DB_URI=postgresql+psycopg2://postgres:postgres@postgres:5432/yuanhang_blogs
+      FLASK_ENV: ${FLASK_ENV}
+      FLASK_KEY: ${FLASK_KEY}
+      DB_URI: ${DB_URI}
     ports:
       - "5000:5000"
     depends_on:
-      - postgres
-      - nginx-proxy-manager
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
+    driver: local

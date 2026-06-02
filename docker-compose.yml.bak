@@ -1,0 +1,42 @@
+services:
+  # 1. Reverse Proxy & Let's Encrypt Certificate Automated Manager
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: always
+    ports:
+      - '80:80'   # Handles HTTP traffic and Let's Encrypt verification
+      - '443:443' # Handles production HTTPS encrypted traffic
+      - '81:81'   # Admin UI Dashboard port
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+
+  # 2. Local PostgreSQL service for the Flask app
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=yuanhang_blogs
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  # 3. Your Flask Blog Core Application Engine (Built from your local repo context)
+  flask-blog:
+    build: .
+    restart: always
+    environment:
+      - FLASK_ENV=production
+      - FLASK_KEY=c7d9e4a2f8b1c6e9a3d7f2b5e8c1a4d6
+      - DB_URI=postgresql+psycopg2://postgres:postgres@postgres:5432/yuanhang_blogs
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - nginx-proxy-manager
+
+volumes:
+  postgres_data:
