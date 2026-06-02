@@ -36,6 +36,9 @@ services:
       FLASK_ENV: ${FLASK_ENV}
       FLASK_KEY: ${FLASK_KEY}
       DB_URI: ${DB_URI}
+      MAIL_ADDRESS: ${MAIL_ADDRESS}
+      MAIL_APP_PW: ${MAIL_APP_PW}
+      CONTACT_RECIPIENT: ${CONTACT_RECIPIENT}
     ports:
       - "5000:5000"
     depends_on:

@@ -28,6 +28,11 @@ POSTGRES_PORT=5432
 
 # Flask-SQLAlchemy Configuration
 DB_URI=postgresql+psycopg2://postgres:postgres@postgres:5432/yuanhang_blogs
+
+# Email configuration
+MAIL_ADDRESS=yh.siegen@gmail.com
+MAIL_APP_PW=
+CONTACT_RECIPIENT=yh.siegen@gmail.com
 EOF
 
 echo ".env file created with:"
@@ -81,6 +86,9 @@ services:
       FLASK_ENV: ${FLASK_ENV}
       FLASK_KEY: ${FLASK_KEY}
       DB_URI: ${DB_URI}
+      MAIL_ADDRESS: ${MAIL_ADDRESS}
+      MAIL_APP_PW: ${MAIL_APP_PW}
+      CONTACT_RECIPIENT: ${CONTACT_RECIPIENT}
     ports:
       - "5000:5000"
     depends_on:
@@ -97,14 +105,14 @@ volumes:
     driver: local
 COMPOSE
 
-echo "docker-compose.yml created"
+echo "docker compose.yml created"
 echo ""
 
 echo "=== Setup Complete ==="
 echo ""
 echo "Next steps:"
 echo "1. Build and start containers:"
-echo "   docker-compose up --build"
+echo "   docker compose up -d --build"
 echo ""
 echo "2. Access the blog at:"
 echo "   http://localhost:5000"
